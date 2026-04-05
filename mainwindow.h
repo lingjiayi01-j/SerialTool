@@ -7,6 +7,8 @@
 #include <QTimer>
 #include <QDebug>
 #include <QThread>
+#include <QCloseEvent>
+#include "work.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -23,27 +25,41 @@ public:
     // 初始化界面控件
     void InitUI();
 
+    // 初始化串口线程
+    void InitCOM();
+
+protected:
+    // 窗口关闭事件
+    void closeEvent(QCloseEvent *event) override;
+
 private slots:
-    // 打开串口按钮点击
     void on_openButton_clicked();
-    // 发送数据按钮点击
     void on_sendButton_clicked();
-    // 复选框状态改变
+    void timeUp();
     void on_checkBox_stateChanged(int arg1);
 
-    // 串口数据读取
-    void serialReadData();
-    // 串口发送字节数反馈
-    void bytesWriteData(qint64 bytes);
-    // 定时器超时
-    void timeUp();
+signals:
+    // 调用子线程槽函数的信号
+    void sigStart(MySerialPort::Settings s);
+    void sigStop();
+    void sigSend(QByteArray data);
+
+public slots:
+    // 接收子线程通知的槽函数
+    void started();
+    void stoped(int status);
+    void recieved(QByteArray data);
 
 private:
     Ui::MainWindow *ui;
 
-    // 串口对象
-    QSerialPort m_serial;
-    // 定时器对象
+    // 串口工作对象（子线程运行）
+    MySerialPort m_serial;
+
+    // 子线程
+    QThread m_thread;
+
+    // 定时器
     QTimer m_timer;
 };
 

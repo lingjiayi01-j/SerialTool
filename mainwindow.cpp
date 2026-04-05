@@ -1,39 +1,44 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include <QCloseEvent>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    // 注册自定义类型，用于信号槽传参
+    qRegisterMetaType<MySerialPort::Settings>("MySerialPort::Settings");
+
     InitUI();
+    InitCOM();
 }
 
 void MainWindow::InitUI()
 {
-    // 端口名称，预置10个串口
-    for(int i=1;i<=10;++i)
-    {
+    // 初始化端口列表 COM1~COM10
+    for (int i = 1; i <= 10; ++i) {
         ui->portName->addItem(QString("COM%1").arg(i));
     }
 
     // 波特率
-    ui->baudRate->addItem("1200" , QSerialPort::Baud1200);
-    ui->baudRate->addItem("2400" , QSerialPort::Baud2400);
-    ui->baudRate->addItem("4800" , QSerialPort::Baud4800);
-    ui->baudRate->addItem("9600" , QSerialPort::Baud9600);
-    ui->baudRate->addItem("19200" , QSerialPort::Baud19200);
+    ui->baudRate->addItem("1200", QSerialPort::Baud1200);
+    ui->baudRate->addItem("2400", QSerialPort::Baud2400);
+    ui->baudRate->addItem("4800", QSerialPort::Baud4800);
+    ui->baudRate->addItem("9600", QSerialPort::Baud9600);
+    ui->baudRate->addItem("19200", QSerialPort::Baud19200);
 
     // 数据位
-    ui->dataBits->addItem("8",QSerialPort::Data8);
-    ui->dataBits->addItem("7",QSerialPort::Data7);
-    ui->dataBits->addItem("6",QSerialPort::Data6);
-    ui->dataBits->addItem("5",QSerialPort::Data5);
+    ui->dataBits->addItem("8", QSerialPort::Data8);
+    ui->dataBits->addItem("7", QSerialPort::Data7);
+    ui->dataBits->addItem("6", QSerialPort::Data6);
+    ui->dataBits->addItem("5", QSerialPort::Data5);
 
     // 奇偶校验
-    ui->parity->addItem("None" , QSerialPort::NoParity);
-    ui->parity->addItem("Even" , QSerialPort::EvenParity);
-    ui->parity->addItem("Odd" , QSerialPort::OddParity);
+    ui->parity->addItem("None", QSerialPort::NoParity);
+    ui->parity->addItem("Even", QSerialPort::EvenParity);
+    ui->parity->addItem("Odd", QSerialPort::OddParity);
 
     // 停止位
     ui->stopBits->addItem("1", QSerialPort::OneStop);
@@ -41,21 +46,32 @@ void MainWindow::InitUI()
     ui->stopBits->addItem("2", QSerialPort::TwoStop);
 
     // 流控制
-    ui->flowControl->addItem("None",QSerialPort::NoFlowControl);
-    ui->flowControl->addItem("RTS/CTS",QSerialPort::HardwareControl);
-    ui->flowControl->addItem("XON/XOFF",QSerialPort::SoftwareControl);
+    ui->flowControl->addItem("None", QSerialPort::NoFlowControl);
+    ui->flowControl->addItem("RTS/CTS", QSerialPort::HardwareControl);
+    ui->flowControl->addItem("XON/XOFF", QSerialPort::SoftwareControl);
 
-    // 定时器的默认时间间隔
+    // 定时器默认间隔
     ui->timelineEdit->setText("1000");
 
-    // 连接有数据到来的信号与槽
-    connect(&m_serial , &QSerialPort::readyRead , this , &MainWindow::serialReadData);
+    // 定时器信号槽连接
+    connect(&m_timer, &QTimer::timeout, this, &MainWindow::timeUp);
+}
 
-    // 连接数据发送后的信号槽
-    connect(&m_serial, &QSerialPort::bytesWritten ,this , &MainWindow::bytesWriteData);
+void MainWindow::InitCOM()
+{
+    // 将串口对象移动到子线程
+    m_serial.moveToThread(&m_thread);
+    m_thread.start();
 
-    // 连接定时器的信号与槽
-    connect(&m_timer,&QTimer::timeout ,this ,&MainWindow::timeUp);
+    // 主线程 -> 子线程（控制指令）
+    connect(this, &MainWindow::sigStart, &m_serial, &MySerialPort::Start);
+    connect(this, &MainWindow::sigStop, &m_serial, &MySerialPort::Stop);
+    connect(this, &MainWindow::sigSend, &m_serial, &MySerialPort::Send);
+
+    // 子线程 -> 主线程（状态通知）
+    connect(&m_serial, &MySerialPort::sigStarted, this, &MainWindow::started);
+    connect(&m_serial, &MySerialPort::sigStoped, this, &MainWindow::stoped);
+    connect(&m_serial, &MySerialPort::sigReceived, this, &MainWindow::recieved);
 }
 
 MainWindow::~MainWindow()
@@ -66,89 +82,69 @@ MainWindow::~MainWindow()
 void MainWindow::on_openButton_clicked()
 {
     QString text = ui->openButton->text();
-    if(text == QStringLiteral("打开串口"))
-    {
-        // 设置串口的各种参数
-        m_serial.setPortName(ui->portName->currentText());
-        m_serial.setBaudRate(ui->baudRate->currentData().toInt());
-        m_serial.setParity((QSerialPort::Parity)ui->parity->currentData().toInt());
-        m_serial.setDataBits((QSerialPort::DataBits)ui->dataBits->currentData().toInt());
-        m_serial.setStopBits((QSerialPort::StopBits)ui->stopBits->currentData().toInt());
-        m_serial.setFlowControl((QSerialPort::FlowControl)ui->flowControl->currentData().toInt());
 
-        // 打开串口
-        bool ret = m_serial.open(QIODevice::ReadWrite);
-        if(ret)
-        {
-            // 打开后禁止更改参数
-            ui->groupBox->setEnabled(false);
-            // 切换按钮文本
-            ui->openButton->setText(QStringLiteral("关闭串口"));
-        }
-        else
-        {
-            // 打开失败，状态栏显示错误信息 5s
-            ui->statusbar->showMessage(m_serial.errorString() + QString::number(m_serial.error()),5000);
-        }
+    if (text == QStringLiteral("打开串口")) {
+        MySerialPort::Settings s;
+        s.name = ui->portName->currentText();
+        s.baudRate = static_cast<QSerialPort::BaudRate>(ui->baudRate->currentData().toInt());
+        s.dataBits = static_cast<QSerialPort::DataBits>(ui->dataBits->currentData().toInt());
+        s.stopBits = static_cast<QSerialPort::StopBits>(ui->stopBits->currentData().toInt());
+        s.parity = static_cast<QSerialPort::Parity>(ui->parity->currentData().toInt());
+        s.flowControl = static_cast<QSerialPort::FlowControl>(ui->flowControl->currentData().toInt());
+
+        emit sigStart(s);
+    } else {
+        emit sigStop();
     }
-    else
-    {
-        // 关闭串口
-        m_serial.close();
-        // 启用更改参数
-        ui->groupBox->setEnabled(true);
-        // 切换按钮文本
-        ui->openButton->setText(QStringLiteral("打开串口"));
-    }
-}
-
-void MainWindow::bytesWriteData(qint64 bytes)
-{
-    ui->statusbar->showMessage(QStringLiteral("发送了%1字节！").arg(bytes),5000);
-}
-
-void MainWindow::serialReadData()
-{
-    // 读取串口的数据
-    QByteArray arr = m_serial.readAll();
-
-    // 字节数组转为字符串
-    QString strText = QString(arr);
-
-    // 加上时间
-    QDateTime current_date_time = QDateTime::currentDateTime();
-    QString t = current_date_time.toString("yyyy-MM-dd hh:mm:ss.zzz : ");
-
-    // 追加到末尾
-    ui->recvTextEdit->appendPlainText(t + strText + "\n");
-
-    // 输出线程ID
-    qDebug() << QThread::currentThreadId();
 }
 
 void MainWindow::on_sendButton_clicked()
 {
     QString strSend = ui->sendTextEdit->toPlainText();
     QByteArray arr = strSend.toUtf8();
-    // 发送数据
-    m_serial.write(arr);
+
+    emit sigSend(arr);
+}
+
+void MainWindow::started()
+{
+    ui->openButton->setText(QStringLiteral("关闭串口"));
+    ui->groupBox->setEnabled(false);
+}
+
+void MainWindow::stoped(int status)
+{
+    ui->openButton->setText(QStringLiteral("打开串口"));
+    ui->groupBox->setEnabled(true);
+}
+
+void MainWindow::recieved(QByteArray arr)
+{
+    QString strText = QString(arr);
+    QString currentTime = QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss.zzz : ");
+
+    ui->recvTextEdit->appendPlainText(currentTime + strText + "\n");
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    emit sigStop();
+    m_thread.quit();
+    m_thread.wait();
+
+    event->accept();
 }
 
 void MainWindow::on_checkBox_stateChanged(int arg1)
 {
-    if(arg1) // 勾选了
-    {
+    if (arg1) {
         m_timer.start(ui->timelineEdit->text().toUInt());
-    }
-    else
-    {
+    } else {
         m_timer.stop();
     }
 }
 
-// 定时器触发的槽函数
 void MainWindow::timeUp()
 {
-    // 发送数据
     on_sendButton_clicked();
 }

@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>黄强老师的串口工具</string>
+   <string>黄强老师的串口工具(多线程)</string>
   </property>
   <property name="styleSheet">
    <string notr="true">/*
