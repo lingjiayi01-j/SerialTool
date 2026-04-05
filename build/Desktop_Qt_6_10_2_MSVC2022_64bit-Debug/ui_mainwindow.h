@@ -700,7 +700,7 @@ public:
         MainWindow->setCentralWidget(centralwidget);
         menubar = new QMenuBar(MainWindow);
         menubar->setObjectName("menubar");
-        menubar->setGeometry(QRect(0, 0, 1014, 38));
+        menubar->setGeometry(QRect(0, 0, 1014, 39));
         MainWindow->setMenuBar(menubar);
         statusbar = new QStatusBar(MainWindow);
         statusbar->setObjectName("statusbar");
@@ -713,7 +713,7 @@ public:
 
     void retranslateUi(QMainWindow *MainWindow)
     {
-        MainWindow->setWindowTitle(QCoreApplication::translate("MainWindow", "\351\273\204\345\274\272\350\200\201\345\270\210\347\232\204\344\270\262\345\217\243\345\267\245\345\205\267(\345\244\232\347\272\277\347\250\213)", nullptr));
+        MainWindow->setWindowTitle(QCoreApplication::translate("MainWindow", "\344\270\262\345\217\243\345\267\245\345\205\267(\345\244\232\347\272\277\347\250\213)", nullptr));
         groupBox->setTitle(QCoreApplication::translate("MainWindow", "\344\270\262\345\217\243\345\217\202\346\225\260\350\256\276\347\275\256", nullptr));
         label->setText(QCoreApplication::translate("MainWindow", "\347\253\257\345\217\243\345\220\215\347\247\260", nullptr));
         label_2->setText(QCoreApplication::translate("MainWindow", "\346\263\242\347\211\271\347\216\207", nullptr));
